@@ -1,0 +1,30 @@
+name: tests-and-gates
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev,anthropic]"
+      - name: Tests (verifier, safety floor, screening, loaders, audit chain)
+        run: pytest -q
+      - name: Gates + governance pack (rules baseline and scripted bad model)
+        run: python evals/run_evals.py
+      - name: Gates with Claude as the investigator (runs only when the API key secret is set)
+        if: ${{ env.ANTHROPIC_API_KEY != '' }}
+        run: python evals/run_evals.py --llm anthropic
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: governance-pack-and-audit-log
+          path: evals/reports/
